@@ -22,3 +22,5 @@ Vagrantfile.local
 /drupal.make.yml
 /scripts/
 /drupal/
+/projects/
+/vendor/

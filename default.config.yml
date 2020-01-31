@@ -15,9 +15,9 @@ vagrant_gui: false
 
 # If you need to run multiple instances of Drupal VM, set a unique hostname,
 # machine name, and IP address for each instance.
-vagrant_hostname: drupalvm.test
-vagrant_machine_name: drupalvm
-vagrant_ip: 192.168.88.88
+vagrant_hostname: local
+vagrant_machine_name: local
+vagrant_ip: 77.77.77.77
 
 # Allow Drupal VM to be accessed via a public network interface on your host.
 # Vagrant boxes are insecure by default, so be careful. You've been warned!
@@ -25,14 +25,14 @@ vagrant_ip: 192.168.88.88
 vagrant_public_ip: ""
 
 # A list of synced folders, with the keys 'local_path', 'destination', and
-# a 'type' of [nfs|rsync|smb] (leave empty for slow native shares). See
+ # a 'type' of [nfs|rsync|smb] (leave empty for slow native shares). See
 # http://docs.drupalvm.com/en/latest/getting-started/syncing-folders/ for more.
 vagrant_synced_folders:
   # The first synced folder will be used for the default Drupal installation, if
   # any of the build_* settings are 'true'. By default the folder is set to
   # the drupal-vm folder.
-  - local_path: .
-    destination: /var/www/drupalvm
+  - local_path: ./projects
+    destination: /var/www/
     type: nfs
     create: true
 
@@ -68,22 +68,37 @@ drush_make_options: "--no-gitinfofile"
 # composer based site deployment strategy.
 drupal_build_composer: false
 drupal_composer_path: "{{ config_dir }}/drupal.composer.json"
-drupal_composer_install_dir: "/var/www/drupalvm/drupal"
+
+
 drupal_composer_dependencies:
   - "drupal/devel:^1.2"
 
 # Set this to 'true' and 'drupal_build_makefile', 'drupal_build_composer' to 'false'
 # if you are using Composer's create-project as a site deployment strategy.
-drupal_build_composer_project: true
+drupal_build_composer_project: false
 drupal_composer_project_package: "drupal-composer/drupal-project:8.x-dev"
 drupal_composer_project_options: "--prefer-dist --stability dev --no-interaction"
 
 # Set this to 'false' if you don't need to install drupal (using the drupal_*
 # settings below), but instead copy down a database (e.g. using drush sql-sync).
-drupal_install_site: true
+drupal_install_site: false
 
 # Required Drupal settings.
-drupal_core_path: "{{ drupal_composer_install_dir }}/web"
+webroot: "/var/www"
+
+edit_path: "{{ webroot }}/edit/web"
+edit_domain: "{{ vagrant_hostname }}-edit.bestfriends.org"
+
+lpxx_path: "{{ webroot }}/lpxx"
+lpla_domain: "{{ vagrant_hostname }}-la.bestfriends.org"
+lput_domain: "{{ vagrant_hostname }}-utah.bestfriends.org"
+lpny_domain: "{{ vagrant_hostname }}-ny.bestfriends.org"
+
+bfas_path: "{{ webroot}}/bfas"
+bfas_domain: "{{ vagrant_hostname }}.bestfriends.org"
+
+bfbase_path:
+
 drupal_core_owner: "{{ drupalvm_user }}"
 drupal_db_user: drupal
 drupal_db_password: drupal
@@ -92,7 +107,7 @@ drupal_db_host: localhost
 
 # Settings for installing a Drupal site if 'drupal_install_site:' is 'true'.
 drupal_major_version: 8
-drupal_domain: "{{ vagrant_hostname }}"
+drupal_domain: "bestfriends.org"
 drupal_site_name: "Drupal"
 drupal_install_profile: standard
 drupal_enable_modules: [ 'devel' ]
@@ -106,13 +121,21 @@ drupal_site_install_extra_args: []
 # (required), minute, hour, day, weekday, month, job (required), and state.
 drupalvm_cron_jobs: []
 
+# Drush install
+drush_launcher_install: true
+drush_launcher_path: /usr/local/bin/launch
+drush_composer_global_install: false
+drush_install_from_source: true
+
 # Drupal VM automatically creates a drush alias file in your ~/.drush folder if
 # this variable is 'true'.
+
 configure_drush_aliases: true
 drush_aliases_host_template: "templates/drupalvm.aliases.drushrc.php.j2"
 drush_aliases_host_template_yml: "templates/drupalvm.aliases.yml.j2"
 drush_aliases_guest_template: "templates/drupalvm-local.aliases.drushrc.php.j2"
 drush_aliases_guest_template_yml: "templates/drupalvm-local.aliases.yml.j2"
+
 
 # Helper variable to configure the PHP-FPM connection for each Apache
 # VirtualHost in the `apache_vhosts` list.
@@ -125,9 +148,24 @@ apache_vhost_php_fpm_parameters: |
 # multisite deployments, you can point multiple servernames at one documentroot.
 # View the geerlingguy.apache Ansible Role README for more options.
 apache_vhosts:
-  - servername: "{{ drupal_domain }}"
-    serveralias: "www.{{ drupal_domain }}"
-    documentroot: "{{ drupal_core_path }}"
+  - servername: "{{ edit_domain }}"
+    documentroot: "{{ edit_path }}"
+    extra_parameters: "{{ apache_vhost_php_fpm_parameters }}"
+
+  - servername: "{{ lpla_domain }}"
+    documentroot: "{{ lpxx_path }}"
+    extra_parameters: "{{ apache_vhost_php_fpm_parameters }}"
+
+  - servername: "{{ lput_domain }}"
+    documentroot: "{{ lpxx_path }}"
+    extra_parameters: "{{ apache_vhost_php_fpm_parameters }}"
+
+  - servername: "{{ lpny_domain }}"
+    documentroot: "{{ lpxx_path }}"
+    extra_parameters: "{{ apache_vhost_php_fpm_parameters }}"
+
+  - servername: "{{ bfas_domain }}"
+    documentroot: "{{ bfas_path }}"
     extra_parameters: "{{ apache_vhost_php_fpm_parameters }}"
 
   - servername: "adminer.{{ vagrant_hostname }}"
@@ -157,29 +195,13 @@ apache_mods_enabled:
   - proxy.load
   - proxy_fcgi.load
 
-# Nginx hosts. Each site will get a server entry using the configuration defined
-# here. Set the 'is_php' property for document roots that contain PHP apps like
-# Drupal.
-nginx_hosts:
-  - server_name: "{{ drupal_domain }} www.{{ drupal_domain }}"
-    root: "{{ drupal_core_path }}"
-    is_php: true
-
-  - server_name: "adminer.{{ vagrant_hostname }}"
-    root: "{{ adminer_install_dir }}"
-    is_php: true
-
-  - server_name: "xhprof.{{ vagrant_hostname }}"
-    root: "{{ php_xhprof_html_dir }}"
-    is_php: true
-
-  - server_name: "pimpmylog.{{ vagrant_hostname }}"
-    root: "{{ pimpmylog_install_dir }}"
-    is_php: true
-
-  - server_name: "{{ vagrant_ip }} dashboard.{{ vagrant_hostname }}"
-    root: "{{ dashboard_install_dir }}"
-    is_php: true
+apache_vhosts_ssl:
+  - servername: "bestfriends.org"
+    documentroot: "/var/www"
+    certificate_file: "/etc/ssl/certs/ssl-cert-snakeoil.pem"
+    certificate_key_file: "/etc/ssl/private/ssl-cert-snakeoil.key"
+    extra_parameters: |
+          ProxyPassMatch ^/(.*\.php(/.*)?)$ "fcgi://127.0.0.1:9000{{ drupal_core_path }}"
 
 nginx_remove_default_vhost: true
 nginx_ppa_use: true
@@ -219,7 +241,7 @@ installed_extras:
   - mailhog
   # - memcached
   # - newrelic
-  # - nodejs
+  - nodejs
   - pimpmylog
   # - redis
   # - ruby
@@ -227,7 +249,7 @@ installed_extras:
   # - solr
   # - tideways
   # - upload-progress
-  - varnish
+  # - varnish
   # - xdebug
   # - xhprof # use `tideways` if you're installing PHP 7+
 
@@ -259,7 +281,7 @@ firewall_disable_ufw: true
 # See version-specific notes: http://docs.drupalvm.com/en/latest/configurations/php/
 php_version: "7.2"
 php_install_recommends: no
-php_memory_limit: "192M"
+php_memory_limit: "512M"
 php_display_errors: "On"
 php_display_startup_errors: "On"
 php_realpath_cache_size: "1024K"
@@ -276,6 +298,7 @@ php_enable_php_fpm: true
 php_fpm_listen: "127.0.0.1:9000"
 
 composer_path: /usr/bin/composer
+composer_version: '1.9.0'
 composer_home_path: "/home/{{ drupalvm_user }}/.composer"
 composer_home_owner: "{{ drupalvm_user }}"
 composer_home_group: "{{ drupalvm_user }}"
@@ -293,7 +316,7 @@ post_provision_scripts: []
 mysql_root_password: root
 mysql_slow_query_log_enabled: true
 mysql_slow_query_time: 2
-mysql_wait_timeout: 300
+mysql_wait_timeout: 6000
 adminer_install_filename: index.php
 
 # Node.js configuration (if enabled above).
